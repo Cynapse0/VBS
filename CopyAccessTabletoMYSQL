@@ -1,0 +1,142 @@
+err.number = 0
+rt = 0
+start = now()
+startms = Timer
+db = Provide A Database Location
+connStr1 = Provide a local database (access (jet4 if 32bit or MSADC if 64bit)
+connStri = Provide a remove database connection string (mySQL ODBC) 
+
+Set objFSO = CreateObject("Scripting.FileSystemObject")
+'tablenames.text is a list of teh tables that need updating it should be crlf delimited
+Set objOpen = objFSO.OpenTextFile(".\tablenames.txt", 1)
+FileContent = objopen.ReadAll
+arrTables = Split(FileContent, VbCrLF)
+objOpen.Close
+Set objOpen = Nothing
+set rs=CreateObject("ADODB.Recordset")
+Set objConn = CreateObject("ADODB.Connection")
+'This is a log file
+Set f = objfso.OpenTextFile(".\sqlst.txt", 8)
+f.writeline "Starting Update of MySQL database : " & Now()
+Set objConn0 = CreateObject("ADODB.Connection")
+objConn0.open connStri
+str1 = month(Date)
+str2 = day(date)
+str3 = year(date)
+datestrs = str3 & "-" & str1 & "-" & str1 & " " & time()
+stQ = "UPDATE `Update` SET `IsUpdating` = True, `DTStamp` = '" & datestrs  & "', `Duration` = '0';"
+
+
+
+'msgbox stQ
+Set rsq = objConn0.execute(stq)
+'msgbox "STOP"
+objConn0.close
+objConn0.open connStri
+For i=0 to UBound(arrTables)
+stQ = "DELETE FROM " & left(cstr(arrtables(i)),len(cstr(arrtables(i)))-1)
+Set rsq = objConn0.execute(stq)
+if err.number = 0 then rt = rt + 1 else err.number = 0
+Next
+Set objConn = CreateObject("ADODB.Connection")
+
+For i=0 to UBound(arrTables)
+st = "SELECT Count(*) FROM " & arrTables(i)
+
+objconn.open connStr1
+rs.CursorLocation=3
+Rs.Open st, objConn, 0, 4
+Set Rs.ActiveConnection = Nothing
+objConn.close
+
+if rs(0) <> 0 then
+rs.close
+st = "SELECT * FROM " & arrTables(i)
+
+objconn.open connStr1
+rs.CursorLocation=3
+Rs.Open st, objConn, 0, 4
+Set Rs.ActiveConnection = Nothing
+objConn.close
+
+rs.movefirst
+z = 0
+
+'the following code builds a field list for an insert into statement and builds a values list. The fieldnames and values must be
+'converted so that MySQL server will accept them
+
+Do Until rs.eof = true
+if rs.eof = true then exit do
+z = z + 1
+if not rs.bof = true or rs.eof <> true then 
+stFields = ""
+stVals = ""
+For each fld in rs.fields
+ff = false
+stfields = stfields & "`" & cstr(fld.name) & "`,"
+if fld.type = 202 then
+if instr(fld.value,"\") <>0 then
+sdr = replace(fld.value,"\","\\")
+ff=true
+End if				
+End if
+if fld.type = 7 then
+if len(fld.value) > 10 then 
+sd = mid(fld.value, 7, 4) & "-" & mid(fld.value,4,2) & "-" & left(fld.value,2) & " " & right (fld.value,8)
+if sd = "0000-00-00 00:00:00" then sd = "1970-01-01 00:00:01"
+stVals = stVals & "'" & sd & "',"
+Else
+if not fld.value = "" then sd = mid(fld.value, 7, 4) & "-" & mid(fld.value,4,2) & "-" & left(fld.value,2) else sd = "1970-01-01 00:00:01"
+stVals = stVals & "'" & sd & "',"
+End if
+End if
+if fld.type <> 7 and not isnumeric(fld.value) and fld.type <> 11 and ff=false then
+stVals = stVals & "'" & fld.value & "',"
+Else
+if fld.type <> 7 and fld.type <> 202 then 
+stVals = stVals & fld.value & "," 
+else 
+if fld.type <> 7 and ff=false then 
+stVals = stVals & "'" & fld.value & "'," 
+else 
+if ff=true then stVals = stVals & "'" & sdr &"',"
+End If
+End If
+End If
+Next
+if right(stVals,1) = "," then stvals= Left(stVals, Len(stVals)-1)
+if right(stfields,1) = "," then stfields= Left(stfields, Len(stfields)-1)
+stQ = "INSERT INTO " & left(cstr(arrtables(i)),len(cstr(arrtables(i)))-1) & " (" & stFields & ") VALUES(" & stvals & ")"
+Set rsq = objConn0.execute(stq)
+if err.number = 0 then rt = rt + 1 else err.number = 0
+End if
+rs.movenext
+Loop
+End if
+if rs.state <> 0 then rs.close
+Next
+
+ms = timer() - startms
+datestrs = str3 & "-" & str1 & "-" & str1 & " " & time()
+stQ = "UPDATE `Update` SET `IsUpdating` = False, `DTStamp` = '" & datestrs  & "', `Duration` = '" & ms & "';"
+Set rsq = objConn0.execute(stq)
+objConn0.Close
+if rsq.state <> 0 then rsq.close
+if rs.state <> 0 then rs.close
+Set rsq = Nothing
+Set objConn0 = Nothing
+
+if ms\3600>0 then h = cstr(ms\3600) else h = "00"
+if ms\60>0 then n = cstr(ms\60) else n = "00"
+s = cstr(cint(ms mod 60))
+cms = mid(cstr(ms),instr(cstr(ms),".")+1,2)
+elapsed=h & "h:" & n & "m:" & s & "s:" & cms & "ms." 
+f.writeline "Program Finished. It took: " & elapsed & vbnewline & "A total of " & rt & " queries were executed."
+f.writeline "Elapsed seconds via Timer() : " & ms
+f.writeline "End Timestamp: " & Now()
+f.writeline 
+f.Close
+set f = nothing
+Set fso = nothing
+Set objConn = nothing
+Set rs = nothing
